@@ -1,0 +1,214 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  avatar    String?
+  role      String   @default("MEMBER")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  memberships ProjectMember[]
+  resources   Resource[]
+  ideas       Idea[]
+  links       Link[]
+  decisions   Decision[]
+  tasks       Task[]
+}
+
+model Project {
+  id            String   @id @default(cuid())
+  name          String
+  slug          String?  @unique
+  description   String
+  problem       String?
+  goal          String?
+  currentStatus String?
+  shareToken    String   @unique @default(cuid())
+  shareAccess   String   @default("VIEW") // "VIEW" | "EDIT"
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  members    ProjectMember[]
+  resources  Resource[]
+  ideas      Idea[]
+  links      Link[]
+  decisions  Decision[]
+  tasks      Task[]
+  workflows  Workflow[]
+  activities Activity[]
+
+  @@index([createdAt])
+}
+
+model ProjectMember {
+  id        String   @id @default(cuid())
+  projectId String
+  userId    String
+  role      String   @default("MEMBER") // "OWNER" | "ADMIN" | "MEMBER" | "VIEWER"
+  joinedAt  DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@index([projectId])
+  @@index([userId])
+}
+
+model Resource {
+  id          String   @id @default(cuid())
+  projectId   String
+  title       String
+  description String?
+  url         String
+  category    String   @default("Article")
+  tags        String   @default("") // comma-separated tags or JSON
+  imageUrl    String?
+  author      String?  // Contributor / Author name
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User?   @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
+  @@index([category])
+}
+
+model Idea {
+  id          String   @id @default(cuid())
+  projectId   String
+  title       String
+  description String?
+  contributor String?
+  tags        String   @default("")
+  status      String   @default("New") // "New" | "Discussing" | "Accepted" | "Rejected" | "Implemented"
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User?   @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
+  @@index([status])
+}
+
+model Link {
+  id          String   @id @default(cuid())
+  projectId   String
+  name        String
+  url         String
+  description String?
+  category    String   @default("Other")
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User?   @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
+  @@index([category])
+}
+
+model Decision {
+  id                     String   @id @default(cuid())
+  projectId              String
+  decision               String   // The decision title / summary
+  context                String?  // Context or problem
+  chosenSolution         String?  // Chosen solution
+  alternativesConsidered String?  // Alternatives considered
+  madeBy                 String?  // Name or role of decider
+  date                   DateTime @default(now())
+  createdById            String?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User?   @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
+}
+
+model Task {
+  id          String    @id @default(cuid())
+  projectId   String
+  title       String
+  description String?
+  assignee    String?
+  status      String    @default("Todo") // "Backlog" | "Todo" | "In Progress" | "Blocked" | "Done"
+  priority    String    @default("Medium") // "Low" | "Medium" | "High" | "Urgent"
+  dueDate     DateTime?
+  order       Int       @default(0)
+  createdById String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User?   @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
+  @@index([status])
+}
+
+model Workflow {
+  id          String   @id @default(cuid())
+  projectId   String
+  title       String   @default("Final Executable Workflow")
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  steps   WorkflowStep[]
+
+  @@index([projectId])
+}
+
+model WorkflowStep {
+  id          String   @id @default(cuid())
+  workflowId  String
+  parentId    String?  // For nesting substeps
+  title       String
+  description String?
+  assignee    String?
+  notes       String?
+  resources   String?  // Links or attached resources
+  isCompleted Boolean  @default(false)
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workflow Workflow       @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  parent   WorkflowStep?  @relation("StepSubsteps", fields: [parentId], references: [id], onDelete: Cascade)
+  children WorkflowStep[] @relation("StepSubsteps")
+
+  @@index([workflowId])
+  @@index([parentId])
+}
+
+model Activity {
+  id          String   @id @default(cuid())
+  projectId   String
+  user        String   @default("Team Member")
+  action      String   // e.g. "added a resource", "created idea", "updated task"
+  entityType  String   // "RESOURCE" | "IDEA" | "LINK" | "DECISION" | "TASK" | "WORKFLOW" | "PROJECT"
+  entityTitle String   // Name/title of the entity
+  createdAt   DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([createdAt])
+}
